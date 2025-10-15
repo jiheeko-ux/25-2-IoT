@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <title>My</title>
-    <H3>나의 웹(2270006, 고지희)</H3>
+   
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script>
         const brokerUrl = 'wss://damoa.io:9002';
@@ -21,59 +21,46 @@
         const client = mqtt.connect(brokerUrl, options);
     
         // 1. 브로커 접속 성공 시 실행되는 이벤트
-        client.on('connect', () => {
-            console.log(`✅ 접속 성공! (클라이언트 ID: ${clientId})`);
-    
-            // 2. 접속 성공 후 토픽 구독
-            const topic = `ewha/2270006`; // 다른 사용자와 겹치지 않도록 고유한 토픽 사용, 본인학번으로 수정
-            client.subscribe(topic, (err) => {
-                if (!err) {
-                    console.log(`📄 토픽 구독 성공: ${topic}`);
-    
-                    // 3. 구독 성공 후 해당 토픽으로 메시지 발행
-                    //const message = 'Hello, MQTT from browser!';
-                    //console.log(`🚀 메시지 발행: "${message}"`);
-                    //client.publish(topic, message);
-                    client.publish('ewha/checkin', "2270006 고지희");
-                } else {
-                    console.error('토픽 구독 오류:', err);
-                }
-            });
-        });
-    
-        // 4. 구독한 토픽으로 메시지가 들어왔을 때 실행되는 이벤트
         client.on('message', (topic, message) => {
-            console.log(`${topic} ${message.toString()}`);
-            // 1. id가 'main'인 div 요소를 찾습니다.
-            const mainDiv = document.getElementById('main');
-    
-            // 2. 새로 추가할 HTML 코드를 문자열로 만듭니다. (백틱 `` 사용)
-            const messageHTML = `
-                <div class="message-item">
-                    <span>${message.toString()}</span>
-                </div>
-            `;
-    
-            // 3. 새로운 HTML을 적용 합니다.
-            mainDiv.innerHTML = messageHTML;
-            
-            // 스크롤을 항상 아래로 이동시켜 최신 메시지를 보여줍니다.
-            mainDiv.scrollTop = mainDiv.scrollHeight;
-    
-            // 모든 작업 완료 후 접속 종료
-            //client.end();
-            //console.log('🔚 작업 완료 후 접속을 종료합니다.');
-        });
+          const s = message.toString();
+          const mainDiv = document.getElementById('main');
+          const now = new Date().toLocaleTimeString();
+
+          // JSON이면 파싱해서 온도/습도 표시
+          let line = '';
+          try {
+            const obj = JSON.parse(s);
+            const t = obj.temperature ?? obj.temp ?? obj.T;
+            const h = obj.humidity ?? obj.hum ?? obj.H;
+            if (t !== undefined || h !== undefined) {
+              line = `📥 <b>${topic}</b> <small>${now}</small> — T: ${t}℃, H: ${h}%`;
+            } else {
+              line = `📥 <b>${topic}</b> <small>${now}</small> — ${s}`;
+            }
+          } catch(_) {
+            // 일반 텍스트
+            line = `📥 <b>${topic}</b> <small>${now}</small> — ${s}`;
+          }
         
-        // 접속 중 에러 발생 시
-        client.on('error', (err) => {
-            console.error('연결 오류:', err);
-            client.end();
+          // 새 줄을 “추가”
+          const div = document.createElement('div');
+          div.className = 'message-item';
+          div.innerHTML = line;
+          mainDiv.appendChild(div);
+        
+          // 최신 메시지 보이게 스크롤
+          mainDiv.scrollTop = mainDiv.scrollHeight;
+        
+          // (선택) 너무 많아지면 앞에서 제거
+          if (mainDiv.children.length > 200) mainDiv.removeChild(mainDiv.firstChild);
         });
+
     </script>
 </head>
     
 <body>
-<div id="main"></div>
+  <h3>나의 웹(2270006, 고지희)</h3>
+  <div id="status">연결 준비…</div>
+  <div id="main"></div>
 </body>
 </html>
