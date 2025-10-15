@@ -1,66 +1,83 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="utf-8" />
-    <title>My</title>
-   
-    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-    <script>
-        const brokerUrl = 'wss://damoa.io:9002';
-    
-        // 고유한 클라이언트 ID 생성 (다른 사용자와 충돌 방지)
-        const clientId = 'iot-client-' + Math.random().toString(16).substr(2, 8);
-        
-        // 별도 인증이 필요 없으므로 options 객체는 간단하게 clientId만 포함
-        const options = {
-          clientId: clientId,
-        };
-    
-        console.log(`MQTT 브로커(${brokerUrl})에 접속을 시도합니다...`);
-        const client = mqtt.connect(brokerUrl, options);
-    
-        // 1. 브로커 접속 성공 시 실행되는 이벤트
-        client.on('message', (topic, message) => {
-          const s = message.toString();
-          const mainDiv = document.getElementById('main');
-          const now = new Date().toLocaleTimeString();
-
-          // JSON이면 파싱해서 온도/습도 표시
-          let line = '';
-          try {
-            const obj = JSON.parse(s);
-            const t = obj.temperature ?? obj.temp ?? obj.T;
-            const h = obj.humidity ?? obj.hum ?? obj.H;
-            if (t !== undefined || h !== undefined) {
-              line = `📥 <b>${topic}</b> <small>${now}</small> — T: ${t}℃, H: ${h}%`;
-            } else {
-              line = `📥 <b>${topic}</b> <small>${now}</small> — ${s}`;
-            }
-          } catch(_) {
-            // 일반 텍스트
-            line = `📥 <b>${topic}</b> <small>${now}</small> — ${s}`;
-          }
-        
-          // 새 줄을 “추가”
-          const div = document.createElement('div');
-          div.className = 'message-item';
-          div.innerHTML = line;
-          mainDiv.appendChild(div);
-        
-          // 최신 메시지 보이게 스크롤
-          mainDiv.scrollTop = mainDiv.scrollHeight;
-        
-          // (선택) 너무 많아지면 앞에서 제거
-          if (mainDiv.children.length > 200) mainDiv.removeChild(mainDiv.firstChild);
-        });
-
-    </script>
+  <meta charset="utf-8" />
+  <title>My</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
+    #main { margin-top: 10px; max-height: 60vh; overflow-y: auto; border: 1px solid #ddd; padding: 12px; border-radius: 8px; }
+    .message-item { padding: 6px 8px; border-bottom: 1px dashed #eee; }
+    .message-item:last-child { border-bottom: 0; }
+    small { opacity: .65; }
+  </style>
 </head>
-    
 <body>
   <h3>나의 웹(2270006, 고지희)</h3>
   <div id="status">연결 준비…</div>
   <div id="main"></div>
+
+  <script>
+    const brokerUrl = 'wss://damoa.io:9002';
+    const topic = 'ewha/2270006';
+
+    const clientId = 'iot-client-' + Math.random().toString(16).substr(2, 8);
+    const client = mqtt.connect(brokerUrl, { clientId });
+
+    const $status = document.getElementById('status');
+    const $main = document.getElementById('main');
+
+    client.on('connect', () => {
+      console.log(`✅ 접속 성공! (클라이언트 ID: ${clientId})`);
+      $status.textContent = `✅ 연결됨 → 구독: ${topic}`;
+      client.subscribe(topic, (err) => {
+        if (!err) {
+          console.log(`📄 토픽 구독 성공: ${topic}`);
+          client.publish('ewha/checkin', '2270006 고지희');
+        } else {
+          console.error('토픽 구독 오류:', err);
+          $status.textContent = '구독 실패: ' + err.message;
+        }
+      });
+    });
+
+    client.on('message', (t, payload) => {
+      const s = payload.toString();
+      const now = new Date().toLocaleTimeString();
+      let line;
+
+      // JSON이면 온습도 예쁘게
+      try {
+        const obj = JSON.parse(s);
+        const tt = obj.temperature ?? obj.temp ?? obj.T;
+        const hh = obj.humidity ?? obj.hum ?? obj.H;
+        if (tt !== undefined || hh !== undefined) {
+          line = `📥 <b>${t}</b> <small>${now}</small> — T: ${tt}℃, H: ${hh}%`;
+        } else {
+          line = `📥 <b>${t}</b> <small>${now}</small> — ${s}`;
+        }
+      } catch {
+        line = `📥 <b>${t}</b> <small>${now}</small> — ${s}`;
+      }
+
+      const div = document.createElement('div');
+      div.className = 'message-item';
+      div.innerHTML = line;
+      $main.appendChild(div);
+      $main.scrollTop = $main.scrollHeight;
+
+      // 200개 넘으면 오래된 것부터 제거(선택)
+      if ($main.children.length > 200) $main.removeChild($main.firstChild);
+    });
+
+    client.on('reconnect', () => { $status.textContent = '재연결 시도 중…'; });
+    client.on('close',     () => { $status.textContent = '연결 종료'; });
+    client.on('error', (err) => {
+      console.error('연결 오류:', err);
+      $status.textContent = '연결 오류: ' + err.message;
+      client.end();
+    });
+  </script>
 </body>
 </html>
+
