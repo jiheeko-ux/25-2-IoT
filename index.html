@@ -1,83 +1,84 @@
+<!-- 프로그램 제목: MQTT 웹 클라이언트 (고지희 2270006) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
   <title>My</title>
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
-    #main { margin-top: 10px; max-height: 60vh; overflow-y: auto; border: 1px solid #ddd; padding: 12px; border-radius: 8px; }
-    .message-item { padding: 6px 8px; border-bottom: 1px dashed #eee; }
-    .message-item:last-child { border-bottom: 0; }
-    small { opacity: .65; }
-  </style>
-</head>
-<body>
-  <h3>나의 웹(2270006, 고지희)</h3>
-  <div id="status">연결 준비…</div>
-  <div id="main"></div>
 
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script>
     const brokerUrl = 'wss://damoa.io:9002';
-    const topic = 'ewha/2270006';
 
+    // 고유한 클라이언트 ID 생성 (다른 사용자와 충돌 방지)
     const clientId = 'iot-client-' + Math.random().toString(16).substr(2, 8);
-    const client = mqtt.connect(brokerUrl, { clientId });
 
-    const $status = document.getElementById('status');
-    const $main = document.getElementById('main');
+    // 별도 인증이 필요 없으므로 options 객체는 간단하게 clientId만 포함
+    const options = {
+      clientId: clientId,
+    };
 
+    console.log(`MQTT 브로커(${brokerUrl})에 접속을 시도합니다...`);
+    const client = mqtt.connect(brokerUrl, options);
+
+    // 1. 브로커 접속 성공 시 실행되는 이벤트
     client.on('connect', () => {
       console.log(`✅ 접속 성공! (클라이언트 ID: ${clientId})`);
-      $status.textContent = `✅ 연결됨 → 구독: ${topic}`;
+
+      // 2. 접속 성공 후 토픽 구독
+      const topic = 'ewha/2270006';  // 
       client.subscribe(topic, (err) => {
         if (!err) {
           console.log(`📄 토픽 구독 성공: ${topic}`);
-          client.publish('ewha/checkin', '2270006 고지희');
+
+          // 3. 구독 성공 후 체크인용 메시지 발행
+          client.publish('ewha/checkin', '2270006 고지희'); // ✅ 네 학번 + 이름
         } else {
           console.error('토픽 구독 오류:', err);
-          $status.textContent = '구독 실패: ' + err.message;
         }
       });
     });
 
-    client.on('message', (t, payload) => {
-      const s = payload.toString();
-      const now = new Date().toLocaleTimeString();
-      let line;
+    // 4. 구독한 토픽으로 메시지가 들어왔을 때 실행되는 이벤트
+    client.on('message', (topic, message) => {
+      console.log(`${topic} ${message.toString()}`);
 
-      // JSON이면 온습도 예쁘게
-      try {
-        const obj = JSON.parse(s);
-        const tt = obj.temperature ?? obj.temp ?? obj.T;
-        const hh = obj.humidity ?? obj.hum ?? obj.H;
-        if (tt !== undefined || hh !== undefined) {
-          line = `📥 <b>${t}</b> <small>${now}</small> — T: ${tt}℃, H: ${hh}%`;
-        } else {
-          line = `📥 <b>${t}</b> <small>${now}</small> — ${s}`;
-        }
-      } catch {
-        line = `📥 <b>${t}</b> <small>${now}</small> — ${s}`;
-      }
+      const mainDiv = document.getElementById('main');
 
-      const div = document.createElement('div');
-      div.className = 'message-item';
-      div.innerHTML = line;
-      $main.appendChild(div);
-      $main.scrollTop = $main.scrollHeight;
+      const messageHTML = `
+        <div class="message-item">
+          <span>${message.toString()}</span>
+        </div>
+      `;
 
-      // 200개 넘으면 오래된 것부터 제거(선택)
-      if ($main.children.length > 200) $main.removeChild($main.firstChild);
+      // 최신 메시지만 보여주는 방식 (이전 메시지는 덮어씀)
+      mainDiv.innerHTML = messageHTML;
+
+      // 스크롤을 항상 아래로 이동시켜 최신 메시지를 보여줌
+      mainDiv.scrollTop = mainDiv.scrollHeight;
     });
 
-    client.on('reconnect', () => { $status.textContent = '재연결 시도 중…'; });
-    client.on('close',     () => { $status.textContent = '연결 종료'; });
+    // 접속 중 에러 발생 시
     client.on('error', (err) => {
       console.error('연결 오류:', err);
-      $status.textContent = '연결 오류: ' + err.message;
       client.end();
     });
   </script>
+
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
+    #main {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      min-height: 60px;
+    }
+    .message-item { padding: 4px 0; }
+  </style>
+</head>
+
+<body>
+  <h3>나의 웹(2270006, 고지희)</h3>  <!-- ✅ 여기에도 네 정보 -->
+  <div id="main">아직 메시지가 없습니다.</div>
 </body>
 </html>
-
